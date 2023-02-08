@@ -13,10 +13,27 @@ load_dotenv()
 SERVER_ID = int(getenv('SERVER_ID'))
 AUTH_CHANNEL_ID = int(getenv('AUTH_CHANNEL_ID'))
 AUTH_ROLE_ID = int(getenv('AUTH_ROLE_ID'))
+LOG_CHANNEL_ID = int(getenv('LOG_CHANNEL_ID'))
 
 # TODO : 인증 로그 구현
 #      : 입력 시도 제한
 #      : env 생성
+
+
+class logger():
+    def __init__(self, channel_id):
+        self.channel = bot.get_channel(channel_id)
+
+    async def success(self, user_id, email):
+        await self.channel.send(f'<@{user_id}>님이 `{email}` 계정 인증에 성공하였습니다.')
+
+    async def fail(self, user_id, email):
+        await self.channel.send(
+            f'<@{user_id}>님이 `{email}` 계정 인증에 5회 실패하여 인증 기능이 잠겼습니다.')
+
+    async def error(self, event, args, kwargs):
+        await self.channel.send(
+            f'`{event}` 이벤트에서 에러가 발생하였습니다.\n\n`{args}`\n`{kwargs}`')
 
 
 class Auth(nextcord.ui.Modal):
@@ -48,7 +65,6 @@ class Auth(nextcord.ui.Modal):
         return bcrypt_sha256.verify(plaintext, ciphertext)
 
     def get_user_info_by_email(self, email):
-        cursor = db.cursor()
         cursor.execute(
             f"SELECT password, name FROM users WHERE email='{email}'")
 
@@ -71,6 +87,7 @@ class Auth(nextcord.ui.Modal):
             await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
             return
         await interaction.response.send_message("인증되었습니다.", ephemeral=True)
+        await log.success(interaction.user.id, self.email.value)
 
 
 class Login(nextcord.ui.View):
@@ -99,8 +116,63 @@ async def set_channel_perm(auth_channel: nextcord.TextChannel):
         await channel.set_permissions(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), view_channel=False)
 
 
+def connect_db():
+    global db, cursor
+
+    db = pymysql.connect(host=getenv('DB_HOST'),
+                         port=int(getenv('DB_PORT')),
+                         user=getenv('DB_USER'),
+                         passwd=getenv('DB_PASSWORD'),
+                         db=getenv('DB_NAME'))
+    cursor = db.cursor()
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_NAME = 'auth';")
+    if cursor.fetchone()[0] != 1:
+        cursor.execute(
+            "CREATE TABLE auth (id BIGINT(20), try INT(11) NOT NULL DEFAULT 0, pass TINYINT(1) NOT NULL DEFAULT 0);")
+        db.commit()
+
+        print('DB Created')
+    else:
+        cursor.execute(
+            "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE FROM information_schema.columns WHERE TABLE_NAME = 'auth';")
+
+        found = cursor.fetchall()
+
+        if len(found) != 3:
+            pass
+        elif found[0][0] != 'id' or found[0][1] != 'bigint' or found[0][2] != None or found[0][3] != 'YES':
+            pass
+        elif found[1][0] != 'try' or found[1][1] != 'int' or found[1][2] != '0' or found[1][3] != 'NO':
+            pass
+        elif found[2][0] != 'pass' or found[2][1] != 'tinyint(1)' or found[2][2] != '0' or found[2][3] != 'NO':
+            pass
+        else:
+            print('DB Connected')
+            return
+
+        print('DB validation failed.')
+        print('We will drop the table and re-create it.')
+        print('All data will be lost.')
+
+        if input('Continue? (y/n): ') != 'y':
+            print('Abort.')
+            exit(1)
+
+        cursor.execute("DROP TABLE auth;")
+        db.close()
+        connect_db()
+
+
 async def initialize():
+    global log
+
     await bot.wait_until_ready()
+
+    log = logger(LOG_CHANNEL_ID)
+
+    connect_db()
 
     auth_channel = bot.get_channel(AUTH_CHANNEL_ID)
     await set_channel_perm(auth_channel)
@@ -121,13 +193,9 @@ async def on_ready():
 async def on_member_join(member: nextcord.Member):
     await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
-if __name__ == "__main__":
-    db = pymysql.connect(host=getenv('DB_HOST'),
-                         port=int(getenv('DB_PORT')),
-                         user=getenv('DB_USER'),
-                         passwd=getenv('DB_PASSWORD'),
-                         db=getenv('DB_NAME'))
 
-    print('DB Connected')
+@bot.event
+async def on_error(event, *args, **kwargs):
+    await log.error(event, args, kwargs)
 
 bot.run(getenv('BOT_TOKEN'))
