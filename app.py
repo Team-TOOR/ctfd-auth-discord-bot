@@ -42,7 +42,6 @@ class Auth(nextcord.ui.Modal):
         return bcrypt_sha256.verify(plaintext, ciphertext)
 
     def get_user_info_by_email(self, email):
-        global db
         cursor = db.cursor()
         cursor.execute(
             f"SELECT password, name FROM users WHERE email='{email}'")
