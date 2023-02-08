@@ -6,7 +6,7 @@ import nextcord
 from nextcord.ext import commands
 
 from passlib.hash import bcrypt_sha256
-import pymysql
+import pymysql # ctfd db를 불러오므로 ORM을 사용하지 않음
 
 load_dotenv()
 
@@ -17,7 +17,6 @@ LOG_CHANNEL_ID = int(getenv('LOG_CHANNEL_ID'))
 
 # TODO : 인증 로그 구현
 #      : 입력 시도 제한
-#      : env 생성
 
 
 class logger():
