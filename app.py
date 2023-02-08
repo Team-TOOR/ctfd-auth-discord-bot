@@ -4,7 +4,9 @@ from nextcord.ext import commands
 from passlib.hash import bcrypt_sha256
 import MySQLdb
 
-TESTING_GUILD_ID = 881780702004252692
+SERVER_ID = 881780702004252692
+AUTH_CHANNEL_ID = 1071731879415394305
+AUTH_ROLE_ID = 1071725158320054302
 
 # TODO : 인증 로그 구현
 #      : 입력 시도 제한
@@ -59,7 +61,7 @@ class Auth(nextcord.ui.Modal):
 
         try:
             await interaction.user.edit(nick=user_info[1])
-            await interaction.user.remove_roles(interaction.user.guild.get_role(1071725158320054302))
+            await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
         except nextcord.errors.Forbidden:
             await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
             return
@@ -82,20 +84,20 @@ bot = commands.Bot(intents=intents)
 
 
 async def set_channel_perm(auth_channel: nextcord.TextChannel):
-    await auth_channel.set_permissions(bot.get_guild(TESTING_GUILD_ID).default_role, view_channel=True)
-    await auth_channel.set_permissions(bot.get_guild(TESTING_GUILD_ID).default_role, send_messages=False)
+    await auth_channel.set_permissions(bot.get_guild(SERVER_ID).default_role, view_channel=True)
+    await auth_channel.set_permissions(bot.get_guild(SERVER_ID).default_role, send_messages=False)
 
     for channel in bot.get_all_channels():
         if channel.id == auth_channel.id:
-            await channel.set_permissions(bot.get_guild(TESTING_GUILD_ID).get_role(1071725158320054302), view_channel=True)
+            await channel.set_permissions(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), view_channel=True)
             continue
-        await channel.set_permissions(bot.get_guild(TESTING_GUILD_ID).get_role(1071725158320054302), view_channel=False)
+        await channel.set_permissions(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), view_channel=False)
 
 
 async def initialize():
     await bot.wait_until_ready()
 
-    auth_channel = bot.get_channel(1071731879415394305)
+    auth_channel = bot.get_channel(AUTH_CHANNEL_ID)
     await set_channel_perm(auth_channel)
 
     view = Login()
@@ -112,7 +114,7 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member: nextcord.Member):
-    await member.add_roles(bot.get_guild(TESTING_GUILD_ID).get_role(1071725158320054302))
+    await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
 if __name__ == "__main__":
     db = MySQLdb.connect(
