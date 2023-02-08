@@ -43,7 +43,6 @@ class Auth(nextcord.ui.Modal):
         return bcrypt_sha256.verify(plaintext, ciphertext)
 
     def get_user_info_by_email(self, email):
-        global db
         cursor = db.cursor()
         cursor.execute(
             f"SELECT password, name FROM users WHERE email='{email}'")
@@ -118,10 +117,10 @@ async def on_member_join(member: nextcord.Member):
     await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
 if __name__ == "__main__":
-    db = pymysql.connect(host='localhost', 
+    db = pymysql.connect(host='localhost',
                          port=3306,
-                         user='root', 
-                         passwd='cksdls123', 
+                         user='root',
+                         passwd='cksdls123',
                          db='ctfd')
 
     print('DB Connected')
