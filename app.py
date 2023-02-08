@@ -2,7 +2,8 @@ import nextcord
 from nextcord.ext import commands
 
 from passlib.hash import bcrypt_sha256
-import MySQLdb
+import pymysql
+
 
 SERVER_ID = 881780702004252692
 AUTH_CHANNEL_ID = 1071731879415394305
@@ -107,8 +108,8 @@ async def initialize():
 
 @bot.event
 async def on_ready():
-    print("Bot is ready.")
     await initialize()
+    print("Bot is ready.")
 
 
 @bot.event
@@ -116,8 +117,11 @@ async def on_member_join(member: nextcord.Member):
     await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
 if __name__ == "__main__":
-    db = MySQLdb.connect(
-        host='localhost', port=3306, user='root', passwd='cksdls123', db='ctfd')
+    db = pymysql.connect(host='localhost', 
+                         port=3306,
+                         user='root', 
+                         passwd='cksdls123', 
+                         db='ctfd')
 
     print('DB Connected')
 
