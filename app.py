@@ -1,13 +1,18 @@
+from os import getenv
+
+from dotenv import load_dotenv
+
 import nextcord
 from nextcord.ext import commands
 
 from passlib.hash import bcrypt_sha256
 import pymysql
 
+load_dotenv()
 
-SERVER_ID = 881780702004252692
-AUTH_CHANNEL_ID = 1071731879415394305
-AUTH_ROLE_ID = 1071725158320054302
+SERVER_ID = int(getenv('SERVER_ID'))
+AUTH_CHANNEL_ID = int(getenv('AUTH_CHANNEL_ID'))
+AUTH_ROLE_ID = int(getenv('AUTH_ROLE_ID'))
 
 # TODO : 인증 로그 구현
 #      : 입력 시도 제한
@@ -117,12 +122,12 @@ async def on_member_join(member: nextcord.Member):
     await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
 if __name__ == "__main__":
-    db = pymysql.connect(host='localhost', 
-                         port=3306,
-                         user='root', 
-                         passwd='cksdls123', 
-                         db='ctfd')
+    db = pymysql.connect(host=getenv('DB_HOST'),
+                         port=int(getenv('DB_PORT')),
+                         user=getenv('DB_USER'),
+                         passwd=getenv('DB_PASSWORD'),
+                         db=getenv('DB_NAME'))
 
     print('DB Connected')
 
-bot.run("MTA3MTY5MjUyODU2MDExOTgzOA.GcGGFf.dnz8zwdo1O0wNP4ST2Jy9xGiHY6ICgWx0_Rt2E")
+bot.run(getenv('BOT_TOKEN'))
