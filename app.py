@@ -54,8 +54,8 @@ class User():
         self.cursor = cursor
 
     def get_ctfd_user_info_by_email(self, email):
-        self.cursor.execute(
-            f"SELECT id, password, name FROM users WHERE email='{email}'")
+        sql = "SELECT id, password, name FROM users WHERE email=?"
+        self.cursor.execute(sql, (email,))
         self.db.commit()
 
         found = self.cursor.fetchone()
@@ -65,8 +65,8 @@ class User():
         return found
 
     def get_discord_user_by_discord_id(self, discord_id):
-        self.cursor.execute(
-            f"SELECT * FROM auth WHERE discord_id='{discord_id}'")
+        sql = "SELECT * FROM auth WHERE discord_id=?"
+        self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
         found = self.cursor.fetchone()
@@ -76,8 +76,8 @@ class User():
         return found
 
     def create_discord_user(self, discord_id) -> bool:
-        self.cursor.execute(
-            f"INSERT INTO auth (discord_id) VALUES ('{discord_id}')")
+        sql = "INSERT INTO auth (discord_id) VALUES (?)"
+        self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
         return True
@@ -88,15 +88,15 @@ class User():
         if discord_user is None:
             return False
 
-        self.cursor.execute(
-            f"UPDATE auth SET user_id='{user_id}' WHERE discord_id='{discord_id}'")
+        sql = "UPDATE auth SET user_id=? WHERE discord_id=?"
+        self.cursor.execute(sql, (user_id, discord_id))
         self.db.commit()
 
         return True
 
     def check_ctfd_user_is_connected(self, user_id) -> bool:
-        self.cursor.execute(
-            f"SELECT * FROM auth WHERE user_id='{user_id}'")
+        sql = "SELECT * FROM auth WHERE user_id=?"
+        self.cursor.execute(sql, (user_id,))
         self.db.commit()
 
         found = self.cursor.fetchone()
@@ -106,8 +106,8 @@ class User():
         return True
 
     def increase_login_try(self, discord_id) -> bool:
-        self.cursor.execute(
-            f"UPDATE auth SET try=try+1 WHERE discord_id='{discord_id}'")
+        sql = "UPDATE auth SET try=try+1 WHERE discord_id=?"
+        self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
         return True
