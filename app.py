@@ -1,5 +1,7 @@
 from os import getenv
 
+import logging
+
 from dotenv import load_dotenv
 
 import nextcord
@@ -8,12 +10,28 @@ from nextcord.ext import commands
 from passlib.hash import bcrypt_sha256
 import pymysql  # ctfd db를 불러오므로 ORM을 사용하지 않음
 
+
+sys_logger = logging.getLogger('nextcord')
+sys_logger.setLevel(logging.INFO)
+
+file_handler = logging.FileHandler(
+    filename='bot.log', encoding='utf-8', mode='w')
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter(
+    '%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+
+sys_logger.addHandler(file_handler)
+sys_logger.addHandler(stream_handler)
+
 load_dotenv()
 
 SERVER_ID = int(getenv('SERVER_ID'))
 AUTH_CHANNEL_ID = int(getenv('AUTH_CHANNEL_ID'))
 AUTH_ROLE_ID = int(getenv('AUTH_ROLE_ID'))
 LOG_CHANNEL_ID = int(getenv('LOG_CHANNEL_ID'))
+
 
 class InvalidLoginInfo(Exception):
     def __init__(self):
@@ -84,7 +102,7 @@ class User():
         if discord_user is None:
             return False
 
-        sql = "UPDATE auth SET user_id=? WHERE discord_id=%s"
+        sql = "UPDATE auth SET user_id=%s WHERE discord_id=%s"
         self.cursor.execute(sql, (user_id, discord_id))
         self.db.commit()
 
@@ -172,6 +190,10 @@ class Auth(nextcord.ui.Modal):
                 await interaction.response.send_message("이미 사용중인 이메일입니다.", ephemeral=True)
             return
 
+        if not users.connect_discord_user_with_ctfd_user(interaction.user.id, user_info['id']):
+            await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
+            return
+
         try:
             await interaction.user.edit(nick=user_info['name'])
             await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
@@ -179,11 +201,8 @@ class Auth(nextcord.ui.Modal):
             await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
             return
 
-        if users.connect_discord_user_with_ctfd_user(interaction.user.id, user_info['id']):
-            await interaction.response.send_message("인증되었습니다.", ephemeral=True)
-            await log.success(interaction.user.id, self.email.value)
-        else:
-            await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
+        await interaction.response.send_message("인증되었습니다.", ephemeral=True)
+        await log.success(interaction.user.id, self.email.value)
 
 
 class Login(nextcord.ui.View):
@@ -202,16 +221,34 @@ bot = commands.Bot(intents=intents)
 
 
 async def set_channel_perm(auth_channel: nextcord.TextChannel):
-    await auth_channel.set_permissions(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), view_channel=True)
-    await auth_channel.set_permissions(bot.get_guild(SERVER_ID).default_role, view_channel=False)
-    await auth_channel.set_permissions(bot.get_guild(SERVER_ID).default_role, send_messages=False)
+    default = auth_channel.overwrites_for(
+        bot.get_guild(SERVER_ID).default_role)
+    default.view_channel = False
+    default.read_messages = False
+    default.read_message_history = False
+    default.send_messages = False
+    await auth_channel.set_permissions(target=bot.get_guild(SERVER_ID).default_role, overwrite=default, reason="인증 채널 생성")
+
+    auth = auth_channel.overwrites_for(
+        bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
+    auth.view_channel = True
+    auth.read_messages = True
+    auth.read_message_history = True
+    auth.send_messages = False
+    await auth_channel.set_permissions(target=bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), overwrite=auth, reason="인증 채널 생성")
 
     for channel in bot.get_all_channels():
-        if channel.id != auth_channel.id:
-            await channel.set_permissions(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), view_channel=False)
+        if channel.id != AUTH_CHANNEL_ID:
+            auth = channel.overwrites_for(
+                bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
+            auth.view_channel = False
+            auth.read_messages = False
+            auth.read_message_history = False
+            auth.send_messages = False
+            await channel.set_permissions(target=bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), overwrite=auth, reason="인증 채널 생성")
 
 
-def connect_db() -> pymysql.cursors.Cursor:
+async def connect_db() -> pymysql.cursors.Cursor:
     global db
 
     db = pymysql.connect(host=getenv('DB_HOST'),
@@ -229,7 +266,7 @@ def connect_db() -> pymysql.cursors.Cursor:
             "CREATE TABLE auth (id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY, discord_id BIGINT(20) NOT NULL UNIQUE, user_id INT(11) UNIQUE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, try INT(11) NOT NULL DEFAULT 0);")
         db.commit()
 
-        print('DB Created')
+        sys_logger.info('DB Created')
         return cursor
     else:
         cursor.execute(
@@ -247,20 +284,76 @@ def connect_db() -> pymysql.cursors.Cursor:
         elif found[3]['COLUMN_NAME'] != 'try' or found[3]['COLUMN_TYPE'] != 'int' or found[3]['COLUMN_DEFAULT'] != '0' or found[3]['IS_NULLABLE'] != 'NO' or found[3]['COLUMN_KEY'] != '' or found[3]['EXTRA'] != '':
             pass
         else:
-            print('DB Connected')
+            sys_logger.info('DB Connected')
             return cursor
 
-        print('DB validation failed.')
-        print('We will drop the table and re-create it.')
-        print('All data will be lost.')
+        sys_logger.warn(
+            'DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.')
 
         if input('Continue? (y/n): ') != 'y':
-            print('Abort.')
-            exit(1)
+            sys_logger.info('Abort.')
+            await bot.close()
 
         cursor.execute("DROP TABLE auth;")
         db.close()
-        return connect_db()  # expect to return cursor
+        return await connect_db()  # expect to return cursor
+
+
+async def check_env():
+    if not getenv('SERVER_ID'):
+        sys_logger.error('SERVER_ID is not set.')
+        await bot.close()
+
+    if not getenv('AUTH_CHANNEL_ID'):
+        sys_logger.error('AUTH_CHANNEL_ID is not set.')
+        await bot.close()
+
+    if not getenv('AUTH_ROLE_ID'):
+        sys_logger.error('AUTH_ROLE_ID is not set.')
+        await bot.close()
+
+    if not getenv('LOG_CHANNEL_ID'):
+        sys_logger.error('LOG_CHANNEL_ID is not set.')
+        await bot.close()
+
+    if not getenv('DB_HOST'):
+        sys_logger.error('DB_HOST is not set.')
+        await bot.close()
+
+    if not getenv('DB_PORT'):
+        sys_logger.error('DB_PORT is not set.')
+        await bot.close()
+
+    if not getenv('DB_USER'):
+        sys_logger.error('DB_USER is not set.')
+        await bot.close()
+
+    if not getenv('DB_PASSWORD'):
+        sys_logger.error('DB_PASSWORD is not set.')
+        await bot.close()
+
+    if not getenv('DB_NAME'):
+        sys_logger.error('DB_NAME is not set.')
+        await bot.close()
+
+    channel = bot.get_channel(AUTH_CHANNEL_ID)
+    if not channel:
+        sys_logger.error('AUTH_CHANNEL_ID is invalid.')
+        await bot.close()
+
+    channel = bot.get_channel(LOG_CHANNEL_ID)
+    if not channel:
+        sys_logger.error('LOG_CHANNEL_ID is invalid.')
+        await bot.close()
+
+    guild = bot.get_guild(SERVER_ID)
+    if not guild:
+        sys_logger.error('SERVER_ID is invalid.')
+        await bot.close()
+
+    if not guild.get_role(AUTH_ROLE_ID):
+        sys_logger.error('AUTH_ROLE_ID is invalid.')
+        await bot.close()
 
 
 async def initialize():
@@ -268,9 +361,11 @@ async def initialize():
 
     await bot.wait_until_ready()
 
+    await check_env()
+
     log = logger(LOG_CHANNEL_ID)
 
-    cursor = connect_db()
+    cursor = await connect_db()
     users = User(db, cursor)
 
     auth_channel = bot.get_channel(AUTH_CHANNEL_ID)
@@ -285,7 +380,7 @@ async def initialize():
 @ bot.event
 async def on_ready():
     await initialize()
-    print("Bot is ready.")
+    sys_logger.info("Bot is ready.")
 
 
 @ bot.event
@@ -300,6 +395,7 @@ async def on_member_join(member: nextcord.Member):
 
 @ bot.event
 async def on_error(event, *args, **kwargs):
+    sys_logger.error('Ignoring exception in %s', event, exc_info=True)
     await log.error(event, args, kwargs)
 
 bot.run(getenv('BOT_TOKEN'))
