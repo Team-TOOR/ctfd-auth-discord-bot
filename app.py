@@ -15,10 +15,6 @@ AUTH_CHANNEL_ID = int(getenv('AUTH_CHANNEL_ID'))
 AUTH_ROLE_ID = int(getenv('AUTH_ROLE_ID'))
 LOG_CHANNEL_ID = int(getenv('LOG_CHANNEL_ID'))
 
-# TODO : 인증 로그 구현
-#      : 입력 시도 제한
-
-
 class InvalidLoginInfo(Exception):
     def __init__(self):
         super().__init__('올바르지 않은 로그인 정보')
@@ -54,7 +50,7 @@ class User():
         self.cursor = cursor
 
     def get_ctfd_user_info_by_email(self, email):
-        sql = "SELECT id, password, name FROM users WHERE email=?"
+        sql = "SELECT id, password, name FROM users WHERE email=%s"
         self.cursor.execute(sql, (email,))
         self.db.commit()
 
@@ -65,7 +61,7 @@ class User():
         return found
 
     def get_discord_user_by_discord_id(self, discord_id):
-        sql = "SELECT * FROM auth WHERE discord_id=?"
+        sql = "SELECT * FROM auth WHERE discord_id=%s"
         self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
@@ -76,7 +72,7 @@ class User():
         return found
 
     def create_discord_user(self, discord_id) -> bool:
-        sql = "INSERT INTO auth (discord_id) VALUES (?)"
+        sql = "INSERT INTO auth (discord_id) VALUES (%s)"
         self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
@@ -88,14 +84,14 @@ class User():
         if discord_user is None:
             return False
 
-        sql = "UPDATE auth SET user_id=? WHERE discord_id=?"
+        sql = "UPDATE auth SET user_id=? WHERE discord_id=%s"
         self.cursor.execute(sql, (user_id, discord_id))
         self.db.commit()
 
         return True
 
     def check_ctfd_user_is_connected(self, user_id) -> bool:
-        sql = "SELECT * FROM auth WHERE user_id=?"
+        sql = "SELECT * FROM auth WHERE user_id=%s"
         self.cursor.execute(sql, (user_id,))
         self.db.commit()
 
@@ -106,7 +102,7 @@ class User():
         return True
 
     def increase_login_try(self, discord_id) -> bool:
-        sql = "UPDATE auth SET try=try+1 WHERE discord_id=?"
+        sql = "UPDATE auth SET try=try+1 WHERE discord_id=%s"
         self.cursor.execute(sql, (discord_id,))
         self.db.commit()
 
@@ -145,7 +141,10 @@ class Auth(nextcord.ui.Modal):
         discord_user_info = users.get_discord_user_by_discord_id(
             interaction.user.id)
 
-        print(discord_user_info)
+        if discord_user_info is None:
+            users.create_discord_user(interaction.user.id)
+            discord_user_info = users.get_discord_user_by_discord_id(
+                interaction.user.id)
 
         if discord_user_info['try'] >= 5:
             await interaction.response.send_message("인증 시도 횟수가 5회를 초과하여 인증 기능이 잠겼습니다.\n운영진에게 문의하세요.", ephemeral=True)
