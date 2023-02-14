@@ -188,6 +188,9 @@ class Auth(nextcord.ui.Modal):
                 await interaction.response.send_message("올바르지 않은 이메일 또는 비밀번호입니다.", ephemeral=True)
             elif isinstance(reason, AlreadyUsedLoginInfo):
                 await interaction.response.send_message("이미 사용중인 이메일입니다.", ephemeral=True)
+            else:
+                await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
+                sys_logger.error(reason)
             return
 
         if not users.connect_discord_user_with_ctfd_user(interaction.user.id, user_info['id']):
@@ -269,28 +272,33 @@ async def connect_db() -> pymysql.cursors.Cursor:
         sys_logger.info('DB Created')
         return cursor
     else:
+        expected_cols = {
+            'id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'PRI', 'EXTRA': 'auto_increment'},
+            'discord_id': {'COLUMN_TYPE': 'bigint', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
+            'user_id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'YES', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
+            'try': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': '0', 'IS_NULLABLE': 'NO', 'COLUMN_KEY': '', 'EXTRA': ''}
+        }
+
         cursor.execute(
             "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_KEY, EXTRA FROM information_schema.columns WHERE TABLE_NAME = 'auth';")
 
         found = cursor.fetchall()
+
         if len(found) != 4:
             pass
-        elif found[0]['COLUMN_NAME'] != 'id' or found[0]['COLUMN_TYPE'] != 'int' or found[0]['COLUMN_DEFAULT'] != None or found[0]['IS_NULLABLE'] != 'NO' or found[0]['COLUMN_KEY'] != 'PRI' or found[0]['EXTRA'] != 'auto_increment':
-            pass
-        elif found[1]['COLUMN_NAME'] != 'discord_id' or found[1]['COLUMN_TYPE'] != 'bigint' or found[1]['COLUMN_DEFAULT'] != None or found[1]['IS_NULLABLE'] != 'NO' or found[1]['COLUMN_KEY'] != 'UNI' or found[1]['EXTRA'] != '':
-            pass
-        elif found[2]['COLUMN_NAME'] != 'user_id' or found[2]['COLUMN_TYPE'] != 'int' or found[2]['COLUMN_DEFAULT'] != None or found[2]['IS_NULLABLE'] != 'YES' or found[2]['COLUMN_KEY'] != 'UNI' or found[2]['EXTRA'] != '':
-            pass
-        elif found[3]['COLUMN_NAME'] != 'try' or found[3]['COLUMN_TYPE'] != 'int' or found[3]['COLUMN_DEFAULT'] != '0' or found[3]['IS_NULLABLE'] != 'NO' or found[3]['COLUMN_KEY'] != '' or found[3]['EXTRA'] != '':
-            pass
         else:
-            sys_logger.info('DB Connected')
-            return cursor
+            for i, col in enumerate(found):
+                expected = expected_cols.get(col['COLUMN_NAME'])
+                if not expected or any(col[k] != v for k, v in expected.items()):
+                    break
+                elif i == 3:
+                    sys_logger.info('DB Connected')
+                    return cursor
 
-        sys_logger.warn(
+        sys_logger.warning(
             'DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.')
 
-        if input('Continue? (y/n): ') != 'y':
+        if await bot.loop.run_in_executor(None, input, 'Continue? (y/n):') != 'y':
             sys_logger.info('Abort.')
             await bot.close()
 
@@ -300,49 +308,19 @@ async def connect_db() -> pymysql.cursors.Cursor:
 
 
 async def check_env():
-    if not getenv('SERVER_ID'):
-        sys_logger.error('SERVER_ID is not set.')
-        await bot.close()
+    env_vars = ['SERVER_ID', 'AUTH_CHANNEL_ID', 'AUTH_ROLE_ID', 'LOG_CHANNEL_ID',
+                'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
 
-    if not getenv('AUTH_CHANNEL_ID'):
-        sys_logger.error('AUTH_CHANNEL_ID is not set.')
-        await bot.close()
+    for env in env_vars:
+        if not getenv(env):
+            sys_logger.error('%s is not set.', env)
+            await bot.close()
 
-    if not getenv('AUTH_ROLE_ID'):
-        sys_logger.error('AUTH_ROLE_ID is not set.')
-        await bot.close()
-
-    if not getenv('LOG_CHANNEL_ID'):
-        sys_logger.error('LOG_CHANNEL_ID is not set.')
-        await bot.close()
-
-    if not getenv('DB_HOST'):
-        sys_logger.error('DB_HOST is not set.')
-        await bot.close()
-
-    if not getenv('DB_PORT'):
-        sys_logger.error('DB_PORT is not set.')
-        await bot.close()
-
-    if not getenv('DB_USER'):
-        sys_logger.error('DB_USER is not set.')
-        await bot.close()
-
-    if not getenv('DB_PASSWORD'):
-        sys_logger.error('DB_PASSWORD is not set.')
-        await bot.close()
-
-    if not getenv('DB_NAME'):
-        sys_logger.error('DB_NAME is not set.')
-        await bot.close()
-
-    channel = bot.get_channel(AUTH_CHANNEL_ID)
-    if not channel:
+    if not bot.get_channel(AUTH_CHANNEL_ID):
         sys_logger.error('AUTH_CHANNEL_ID is invalid.')
         await bot.close()
 
-    channel = bot.get_channel(LOG_CHANNEL_ID)
-    if not channel:
+    if not bot.get_channel(LOG_CHANNEL_ID):
         sys_logger.error('LOG_CHANNEL_ID is invalid.')
         await bot.close()
 
