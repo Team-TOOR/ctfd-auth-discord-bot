@@ -1,4 +1,6 @@
 .vscode
 .venv
 .env
-bot.log
+.log
+.ipynb_checkpoints
+.ipynb

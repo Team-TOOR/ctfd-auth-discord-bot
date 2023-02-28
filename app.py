@@ -8,7 +8,8 @@ import nextcord
 from nextcord.ext import commands
 
 from passlib.hash import bcrypt_sha256
-import pymysql  # ctfd db를 불러오므로 ORM을 사용하지 않음
+# import pymysql  # ctfd db를 불러오므로 ORM을 사용하지 않음
+import sqlalchemy
 
 
 sys_logger = logging.getLogger('nextcord')
@@ -61,70 +62,93 @@ class logger():
         await self.channel.send(
             f'`{event}` 이벤트에서 에러가 발생하였습니다.\n\n`{args}`\n`{kwargs}`')
 
+    async def etc(self, msg):
+        await self.channel.send(msg)
+
 
 class User():
-    def __init__(self, conn, cursor):
-        self.db = conn
-        self.cursor = cursor
+    def __init__(self, conn, engine):
+        self.conn = conn
+        self.engine = engine
+        self.user_table, self.auth_table = self.load_tables()
+
+    def load_tables(self):
+        user_table = sqlalchemy.Table(
+            'users', sqlalchemy.MetaData(), autoload=True, autoload_with=self.engine)
+        auth_table = sqlalchemy.Table(
+            'auth', sqlalchemy.MetaData(), autoload=True, autoload_with=self.engine)
+        return user_table, auth_table
+
+    def select_query(self, query):
+        res = self.conn.execute(query)
+        data = res.fetchone()
+
+        return data
 
     def get_ctfd_user_info_by_email(self, email):
-        sql = "SELECT id, password, name FROM users WHERE email=%s"
-        self.cursor.execute(sql, (email,))
-        self.db.commit()
-
-        found = self.cursor.fetchone()
-        if found == None:
-            return None
-
-        return found
+        query = sqlalchemy.select([self.user_table.c.id, self.user_table.c.password]).where(
+            self.user_table.c.email == email)
+        return self.select_query(query)
 
     def get_discord_user_by_discord_id(self, discord_id):
-        sql = "SELECT * FROM auth WHERE discord_id=%s"
-        self.cursor.execute(sql, (discord_id,))
-        self.db.commit()
-
-        found = self.cursor.fetchone()
-        if found == None:
-            return None
-
-        return found
+        query = sqlalchemy.select([self.auth_table]).where(
+            self.auth_table.c.discord_id == discord_id)
+        return self.select_query(query)
 
     def create_discord_user(self, discord_id) -> bool:
-        sql = "INSERT INTO auth (discord_id) VALUES (%s)"
-        self.cursor.execute(sql, (discord_id,))
-        self.db.commit()
+        query = self.auth_table.insert().values(discord_id=discord_id)
+
+        try:
+            self.conn.execute(query)
+        except sqlalchemy.exc.IntegrityError:
+            return False
 
         return True
 
-    def connect_discord_user_with_ctfd_user(self, discord_id, user_id) -> bool:
+    def connect_discord_user_with_ctfd_user(self, discord_id, ctfd_id) -> bool:
         discord_user = self.get_discord_user_by_discord_id(discord_id)
 
         if discord_user is None:
             return False
 
-        sql = "UPDATE auth SET user_id=%s WHERE discord_id=%s"
-        self.cursor.execute(sql, (user_id, discord_id))
-        self.db.commit()
+        query = self.auth_table.update().where(self.auth_table.c.discord_id ==
+                                               discord_id).values(ctfd_id=ctfd_id)
 
-        return True
-
-    def check_ctfd_user_is_connected(self, user_id) -> bool:
-        sql = "SELECT * FROM auth WHERE user_id=%s"
-        self.cursor.execute(sql, (user_id,))
-        self.db.commit()
-
-        found = self.cursor.fetchone()
-        if found == None:
+        try:
+            self.conn.execute(query)
+        except sqlalchemy.exc.IntegrityError:
             return False
 
         return True
 
+    def check_ctfd_user_is_connected(self, ctfd_id) -> bool:
+        query = self.auth_table.select().where(
+            self.auth_table.c.ctfd_id == ctfd_id)
+        if self.select_query(query) is None:
+            return False
+        return True
+
     def increase_login_try(self, discord_id) -> bool:
-        sql = "UPDATE auth SET try=try+1 WHERE discord_id=%s"
-        self.cursor.execute(sql, (discord_id,))
-        self.db.commit()
+        query = self.auth_table.select().where(
+            self.auth_table.c.discord_id == discord_id)
+        discord_user = self.select_query(query)
+
+        if discord_user is None:
+            return False
+
+        query = self.auth_table.update().where(self.auth_table.c.discord_id == discord_id).values(
+            login_try=discord_user["login_try"] + 1)
+        try:
+            self.conn.execute(query)
+        except sqlalchemy.exc.IntegrityError:
+            return False
 
         return True
+
+    def get_ctfd_user_name_by_id(self, ctfd_id):
+        query = sqlalchemy.select([self.user_table.c.name]).where(
+            self.user_table.c.id == ctfd_id)
+        return self.select_query(query)
 
 
 class Auth(nextcord.ui.Modal):
@@ -155,6 +179,31 @@ class Auth(nextcord.ui.Modal):
     def verify_password(self, plaintext, ciphertext) -> bool:
         return bcrypt_sha256.verify(plaintext, ciphertext)
 
+    async def set_permissions(self, interaction, discord_id, ctfd_id):
+        username = users.get_ctfd_user_name_by_id(ctfd_id)
+
+        if username is None:
+            await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
+            await log.error("set_permissions", [interaction, discord_id, ctfd_id], {})
+            return
+        # try:
+        #     await interaction.user.edit(nick=username[0])
+        #     await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
+        # except nextcord.errors.Forbidden:
+            # await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
+            # return
+
+        await interaction.response.send_message("이미 인증되었습니다.", ephemeral=True)
+        await log.etc(f"<@{interaction.user.id}>님이 재인증을 시도하였습니다.")
+
+    async def link_and_set_permissions(self, interaction, discord_id, ctfd_id):
+        if not users.connect_discord_user_with_ctfd_user(discord_id, ctfd_id):
+            await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
+            await log.error("set_permissions", [interaction, discord_id, ctfd_id], {})
+            return
+
+        return await self.set_permissions(interaction, discord_id, ctfd_id)
+
     async def callback(self, interaction: nextcord.Interaction) -> None:
         discord_user_info = users.get_discord_user_by_discord_id(
             interaction.user.id)
@@ -164,7 +213,7 @@ class Auth(nextcord.ui.Modal):
             discord_user_info = users.get_discord_user_by_discord_id(
                 interaction.user.id)
 
-        if discord_user_info['try'] >= 5:
+        if discord_user_info['login_try'] >= 5:
             await interaction.response.send_message("인증 시도 횟수가 5회를 초과하여 인증 기능이 잠겼습니다.\n운영진에게 문의하세요.", ephemeral=True)
             await log.lock(interaction.user.id, self.email.value)
             return
@@ -174,7 +223,7 @@ class Auth(nextcord.ui.Modal):
         try:
             if user_info is None:
                 raise InvalidLoginInfo
-            if discord_user_info['user_id'] is not None:
+            if discord_user_info['ctfd_id'] is not None:
                 raise AlreadyUsedLoginInfo
             if users.check_ctfd_user_is_connected(user_info['id']):
                 raise AlreadyUsedLoginInfo
@@ -193,19 +242,7 @@ class Auth(nextcord.ui.Modal):
                 sys_logger.error(reason)
             return
 
-        if not users.connect_discord_user_with_ctfd_user(interaction.user.id, user_info['id']):
-            await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
-            return
-
-        try:
-            await interaction.user.edit(nick=user_info['name'])
-            await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
-        except nextcord.errors.Forbidden:
-            await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
-            return
-
-        await interaction.response.send_message("인증되었습니다.", ephemeral=True)
-        await log.success(interaction.user.id, self.email.value)
+        await self.link_and_set_permissions(interaction, interaction.user.id, user_info['id'])
 
 
 class Login(nextcord.ui.View):
@@ -215,6 +252,12 @@ class Login(nextcord.ui.View):
     @nextcord.ui.button(label="로그인", style=nextcord.ButtonStyle.green)
     async def login(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         modal = Auth()
+        discord_user_info = users.get_discord_user_by_discord_id(
+            interaction.user.id)
+        if discord_user_info['ctfd_id'] is not None:
+            await modal.set_permissions(interaction, interaction.user.id, discord_user_info['ctfd_id'])
+            return
+
         await interaction.response.send_modal(modal)
 
 
@@ -251,65 +294,71 @@ async def set_channel_perm(auth_channel: nextcord.TextChannel):
             await channel.set_permissions(target=bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), overwrite=auth, reason="인증 채널 생성")
 
 
-async def connect_db() -> pymysql.cursors.Cursor:
-    global db
+async def connect_db(db_url: str):
+    engine = sqlalchemy.create_engine(db_url)
+    conn = engine.connect()
 
-    db = pymysql.connect(host=getenv('DB_HOST'),
-                         port=int(getenv('DB_PORT')),
-                         user=getenv('DB_USER'),
-                         passwd=getenv('DB_PASSWORD'),
-                         db=getenv('DB_NAME'),
-                         cursorclass=pymysql.cursors.DictCursor)
-    cursor = db.cursor()
+    query = sqlalchemy.select([sqlalchemy.func.count()]).select_from(sqlalchemy.text(
+        "information_schema.tables")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
+    res = conn.execute(query)
+    data = res.fetchone()
 
-    cursor.execute(
-        "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_NAME = 'auth';")
-    if cursor.fetchone()['COUNT(*)'] != 1:
-        cursor.execute(
-            "CREATE TABLE auth (id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY, discord_id BIGINT(20) NOT NULL UNIQUE, user_id INT(11) UNIQUE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, try INT(11) NOT NULL DEFAULT 0);")
-        db.commit()
+    if data[0] != 1:
+        meta = sqlalchemy.MetaData()
+        sqlalchemy.Table('users', meta, autoload=True, autoload_with=engine)
+        auth_table = sqlalchemy.Table(
+            'auth', meta,
+            sqlalchemy.Column('id', sqlalchemy.Integer,
+                              primary_key=True, autoincrement=True, nullable=False),
+            sqlalchemy.Column('discord_id', sqlalchemy.BigInteger,
+                              nullable=False, unique=True),
+            sqlalchemy.Column('ctfd_id', sqlalchemy.Integer, sqlalchemy.ForeignKey(
+                'users.id', ondelete="CASCADE"), nullable=True, unique=True),
+            sqlalchemy.Column('login_try', sqlalchemy.Integer,
+                              nullable=False, server_default="0"),
+        )
+        meta.create_all(engine)
 
-        sys_logger.info('DB Created')
-        return cursor
+        sys_logger.info("AUTH TABLE Created")
+        return conn, engine
     else:
-        expected_cols = {
+        expected_columns = {
             'id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'PRI', 'EXTRA': 'auto_increment'},
             'discord_id': {'COLUMN_TYPE': 'bigint', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
-            'user_id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'YES', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
-            'try': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': '0', 'IS_NULLABLE': 'NO', 'COLUMN_KEY': '', 'EXTRA': ''}
+            'ctfd_id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'YES', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
+            'login_try': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': '0', 'IS_NULLABLE': 'NO', 'COLUMN_KEY': '', 'EXTRA': ''}
         }
 
-        cursor.execute(
-            "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_KEY, EXTRA FROM information_schema.columns WHERE TABLE_NAME = 'auth';")
+        query = sqlalchemy.select([sqlalchemy.text("COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_KEY, EXTRA")]).select_from(sqlalchemy.text(
+            "information_schema.columns")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
+        res = conn.execute(query)
+        data = res.fetchall()
 
-        found = cursor.fetchall()
-
-        if len(found) != 4:
+        if len(data) != len(expected_columns):
             pass
         else:
-            for i, col in enumerate(found):
-                expected = expected_cols.get(col['COLUMN_NAME'])
-                if not expected or any(col[k] != v for k, v in expected.items()):
+            for i, col in enumerate(data):
+                expected = expected_columns.get(col['COLUMN_NAME'])
+                if not expected or any([col[k] != v for k, v in expected.items()]):
                     break
-                elif i == 3:
-                    sys_logger.info('DB Connected')
-                    return cursor
-
+                elif i == len(data) - 1:
+                    sys_logger.info("DB Connected")
+                    return conn, engine
         sys_logger.warning(
-            'DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.')
+            "DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.")
 
-        if await bot.loop.run_in_executor(None, input, 'Continue? (y/n):') != 'y':
+        if await bot.loop.run_in_executor(None, input, 'Continue? (y/n):').lower() != 'y':
             sys_logger.info('Abort.')
             await bot.close()
 
-        cursor.execute("DROP TABLE auth;")
-        db.close()
-        return await connect_db()  # expect to return cursor
+        query = sqlalchemy.text("DROP TABLE auth;")
+        conn.execute(query)
+        return await connect_db(db_url)
 
 
 async def check_env():
-    env_vars = ['SERVER_ID', 'AUTH_CHANNEL_ID', 'AUTH_ROLE_ID', 'LOG_CHANNEL_ID',
-                'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
+    env_vars = ['SERVER_ID', 'AUTH_CHANNEL_ID',
+                'AUTH_ROLE_ID', 'LOG_CHANNEL_ID', 'DB_URL']
 
     for env in env_vars:
         if not getenv(env):
@@ -343,8 +392,8 @@ async def initialize():
 
     log = logger(LOG_CHANNEL_ID)
 
-    cursor = await connect_db()
-    users = User(db, cursor)
+    conn, engine = await connect_db(getenv('DB_URL'))
+    users = User(conn=conn, engine=engine)
 
     auth_channel = bot.get_channel(AUTH_CHANNEL_ID)
     await set_channel_perm(auth_channel)
@@ -366,7 +415,7 @@ async def on_member_join(member: nextcord.Member):
     user = users.get_discord_user_by_discord_id(member.id)
     if user is None:
         users.create_discord_user(member.id)
-    elif user["user_id"] is not None:
+    elif user["ctfd_id"] is not None:
         return
     await member.add_roles(bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID))
 
