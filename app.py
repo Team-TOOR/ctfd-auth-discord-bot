@@ -8,7 +8,6 @@ import nextcord
 from nextcord.ext import commands
 
 from passlib.hash import bcrypt_sha256
-# import pymysql  # ctfd db를 불러오므로 ORM을 사용하지 않음
 import sqlalchemy
 
 
@@ -186,12 +185,12 @@ class Auth(nextcord.ui.Modal):
             await interaction.response.send_message("예기치 못한 오류", ephemeral=True)
             await log.error("set_permissions", [interaction, discord_id, ctfd_id], {})
             return
-        # try:
-        #     await interaction.user.edit(nick=username[0])
-        #     await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
-        # except nextcord.errors.Forbidden:
-            # await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
-            # return
+        try:
+            await interaction.user.edit(nick=username[0])
+            await interaction.user.remove_roles(interaction.user.guild.get_role(AUTH_ROLE_ID))
+        except nextcord.errors.Forbidden:
+            await interaction.response.send_message("봇보다 높은 권한을 가진 유저는 해당 명령을 실행할 수 없습니다.", ephemeral=True)
+            return
 
         await interaction.response.send_message("이미 인증되었습니다.", ephemeral=True)
         await log.etc(f"<@{interaction.user.id}>님이 재인증을 시도하였습니다.")
