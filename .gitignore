@@ -1,6 +1,6 @@
 .vscode
 .venv
 .env
-.log
+*.log
 .ipynb_checkpoints
-.ipynb
+*.ipynb
