@@ -1,10 +1,19 @@
-2023-03-01 04:49:48,649:WARNING:nextcord.client: PyNaCl is not installed, voice will NOT be supported
-2023-03-01 04:49:48,650:INFO:nextcord.client: logging in using static token
-2023-03-01 04:49:49,332:INFO:nextcord.gateway: Shard ID None has sent the IDENTIFY payload.
-2023-03-01 04:49:49,674:INFO:nextcord.gateway: Shard ID None has connected to Gateway: ["gateway-prd-us-east1-c-jhbv",{"micros":142568,"calls":["id_created",{"micros":851,"calls":[]},"session_lookup_time",{"micros":6938,"calls":[]},"session_lookup_finished",{"micros":15,"calls":[]},"discord-sessions-blue-prd-2-140",{"micros":134320,"calls":["start_session",{"micros":86497,"calls":["discord-api-55ccbb4788-x7mkr",{"micros":79152,"calls":["get_user",{"micros":18331},"get_guilds",{"micros":6438},"send_scheduled_deletion_message",{"micros":7},"guild_join_requests",{"micros":3067},"authorized_ip_coro",{"micros":8}]}]},"starting_guild_connect",{"micros":53,"calls":[]},"presence_started",{"micros":16351,"calls":[]},"guilds_started",{"micros":87,"calls":[]},"guilds_connect",{"micros":1,"calls":[]},"presence_connect",{"micros":31277,"calls":[]},"connect_finished",{"micros":31282,"calls":[]},"build_ready",{"micros":21,"calls":[]},"clean_ready",{"micros":26,"calls":[]},"optimize_ready",{"micros":0,"calls":[]},"split_ready",{"micros":1,"calls":[]}]}]}] (Session ID: 5052a411e19b3a8d5a9b1a6ff660c2a0). Resume URL specified as wss://gateway-us-east1-c.discord.gg
-2023-03-01 04:49:51,752:INFO:nextcord: DB Connected
-2023-03-01 04:49:55,146:INFO:nextcord: Bot is ready.
-2023-03-01 04:50:29,242:INFO:nextcord.client: Cleaning up tasks.
-2023-03-01 04:50:29,244:INFO:nextcord.client: Cleaning up after 2 tasks.
-2023-03-01 04:50:29,452:INFO:nextcord.client: All tasks finished cancelling.
-2023-03-01 04:50:29,453:INFO:nextcord.client: Closing the event loop.
+2023-03-02 02:03:13,448:WARNING:nextcord.client: PyNaCl is not installed, voice will NOT be supported
+2023-03-02 02:03:13,448:INFO:nextcord.client: logging in using static token
+2023-03-02 02:03:14,084:INFO:nextcord.gateway: Shard ID None has sent the IDENTIFY payload.
+2023-03-02 02:03:14,420:INFO:nextcord.gateway: Shard ID None has connected to Gateway: ["gateway-prd-us-east1-d-l5w9",{"micros":131445,"calls":["id_created",{"micros":1762,"calls":[]},"session_lookup_time",{"micros":4646,"calls":[]},"session_lookup_finished",{"micros":14,"calls":[]},"discord-sessions-blue-prd-2-126",{"micros":123853,"calls":["start_session",{"micros":91902,"calls":["discord-api-55ccbb4788-cbbmd",{"micros":85409,"calls":["get_user",{"micros":15101},"get_guilds",{"micros":9859},"send_scheduled_deletion_message",{"micros":11},"guild_join_requests",{"micros":214},"authorized_ip_coro",{"micros":12}]}]},"starting_guild_connect",{"micros":65,"calls":[]},"presence_started",{"micros":379,"calls":[]},"guilds_started",{"micros":96,"calls":[]},"guilds_connect",{"micros":1,"calls":[]},"presence_connect",{"micros":31351,"calls":[]},"connect_finished",{"micros":31357,"calls":[]},"build_ready",{"micros":28,"calls":[]},"clean_ready",{"micros":23,"calls":[]},"optimize_ready",{"micros":1,"calls":[]},"split_ready",{"micros":1,"calls":[]}]}]}] (Session ID: 977bb7af006bdcf1bac2f5cc55fdefac). Resume URL specified as wss://gateway-us-east1-d.discord.gg
+2023-03-02 02:03:16,506:INFO:nextcord: DB Connected
+2023-03-02 02:03:26,455:INFO:nextcord: Bot is ready.
+2023-03-02 02:08:10,777:INFO:nextcord.gateway: Websocket closed with WSCloseCode.ABNORMAL_CLOSURE, attempting a reconnect.
+2023-03-02 02:08:10,778:INFO:nextcord.client: Got a request to RESUME the websocket.
+2023-03-02 02:08:11,032:INFO:nextcord.gateway: Shard ID None has sent the RESUME payload.
+2023-03-02 02:08:11,233:INFO:nextcord.gateway: Shard ID None session has been invalidated.
+2023-03-02 02:08:11,434:INFO:nextcord.client: Got a request to IDENTIFY the websocket.
+2023-03-02 02:08:16,747:INFO:nextcord.gateway: Shard ID None has sent the IDENTIFY payload.
+2023-03-02 02:08:17,095:INFO:nextcord.gateway: Shard ID None has connected to Gateway: ["gateway-prd-us-east1-b-tr92",{"micros":146941,"calls":["id_created",{"micros":1080,"calls":[]},"session_lookup_time",{"micros":1685,"calls":[]},"session_lookup_finished",{"micros":15,"calls":[]},"discord-sessions-blue-prd-2-214",{"micros":143910,"calls":["start_session",{"micros":71525,"calls":["discord-api-55ccbb4788-ghkpx",{"micros":66036,"calls":["get_user",{"micros":21537},"get_guilds",{"micros":10649},"send_scheduled_deletion_message",{"micros":10},"guild_join_requests",{"micros":1005},"authorized_ip_coro",{"micros":21}]}]},"starting_guild_connect",{"micros":56,"calls":[]},"presence_started",{"micros":235,"calls":[]},"guilds_started",{"micros":77,"calls":[]},"guilds_connect",{"micros":1,"calls":[]},"presence_connect",{"micros":71959,"calls":[]},"connect_finished",{"micros":71964,"calls":[]},"build_ready",{"micros":25,"calls":[]},"clean_ready",{"micros":1,"calls":[]},"optimize_ready",{"micros":25,"calls":[]},"split_ready",{"micros":1,"calls":[]}]}]}] (Session ID: 487dae73d85218dd2a4545d785ad2b36). Resume URL specified as wss://gateway-us-east1-b.discord.gg
+2023-03-02 02:08:19,123:INFO:nextcord: DB Connected
+2023-03-02 02:08:27,929:INFO:nextcord: Bot is ready.
+2023-03-02 02:08:49,616:INFO:nextcord.client: Cleaning up tasks.
+2023-03-02 02:08:49,616:INFO:nextcord.client: Cleaning up after 3 tasks.
+2023-03-02 02:08:49,821:INFO:nextcord.client: All tasks finished cancelling.
+2023-03-02 02:08:49,822:INFO:nextcord.client: Closing the event loop.
