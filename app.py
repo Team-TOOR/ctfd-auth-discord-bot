@@ -32,6 +32,10 @@ AUTH_CHANNEL_ID = int(getenv('AUTH_CHANNEL_ID'))
 AUTH_ROLE_ID = int(getenv('AUTH_ROLE_ID'))
 LOG_CHANNEL_ID = int(getenv('LOG_CHANNEL_ID'))
 
+SECURITY_FIRST_ROLE=1068859730228940820
+CRG_ROLE=1068860411996282981
+K_KNOCK_ROLE=1068860442929274930
+TOOR_ROLE=1068860494968012912
 
 class InvalidLoginInfo(Exception):
     def __init__(self):
@@ -168,8 +172,7 @@ class User():
         query = sqlalchemy.select([user_table.c.name]).where(
             user_table.c.id == ctfd_id)
         return self.select_query(query)
-
-
+    
 class Auth(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(
@@ -314,66 +317,66 @@ async def set_channel_perm(auth_channel: nextcord.TextChannel):
             await channel.set_permissions(target=bot.get_guild(SERVER_ID).get_role(AUTH_ROLE_ID), overwrite=auth, reason="인증 채널 생성")
 
 
-async def connect_db(db_url: str):
-    engine = sqlalchemy.create_engine(db_url)
+# async def connect_db(db_url: str):
+#     engine = sqlalchemy.create_engine(db_url)
 
-    with engine.connect() as conn:
-        query = sqlalchemy.select([sqlalchemy.func.count()]).select_from(sqlalchemy.text(
-            "information_schema.tables")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
-        res = conn.execute(query)
-        data = res.fetchone()
+#     with engine.connect() as conn:
+#         query = sqlalchemy.select([sqlalchemy.func.count()]).select_from(sqlalchemy.text(
+#             "information_schema.tables")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
+#         res = conn.execute(query)
+#         data = res.fetchone()
 
-        if data[0] != 1:
-            meta = sqlalchemy.MetaData()
-            sqlalchemy.Table('users', meta, autoload=True, autoload_with=engine)
-            sqlalchemy.Table(
-                'auth', meta,
-                sqlalchemy.Column('id', sqlalchemy.Integer,
-                                primary_key=True, autoincrement=True, nullable=False),
-                sqlalchemy.Column('discord_id', sqlalchemy.BigInteger,
-                                nullable=False, unique=True),
-                sqlalchemy.Column('ctfd_id', sqlalchemy.Integer, sqlalchemy.ForeignKey(
-                    'users.id', ondelete="CASCADE"), nullable=True, unique=True),
-                sqlalchemy.Column('login_try', sqlalchemy.Integer,
-                                nullable=False, server_default="0"),
-            )
-            meta.create_all(engine)
+#         if data[0] != 1:
+#             meta = sqlalchemy.MetaData()
+#             sqlalchemy.Table('users', meta, autoload=True, autoload_with=engine)
+#             sqlalchemy.Table(
+#                 'auth', meta,
+#                 sqlalchemy.Column('id', sqlalchemy.Integer,
+#                                 primary_key=True, autoincrement=True, nullable=False),
+#                 sqlalchemy.Column('discord_id', sqlalchemy.BigInteger,
+#                                 nullable=False, unique=True),
+#                 sqlalchemy.Column('ctfd_id', sqlalchemy.Integer, sqlalchemy.ForeignKey(
+#                     'users.id', ondelete="CASCADE"), nullable=True, unique=True),
+#                 sqlalchemy.Column('login_try', sqlalchemy.Integer,
+#                                 nullable=False, server_default="0"),
+#             )
+#             meta.create_all(engine)
 
-            sys_logger.info("AUTH TABLE Created")
-            return engine
-        else:
-            expected_columns = {
-                'id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'PRI', 'EXTRA': 'auto_increment'},
-                'discord_id': {'COLUMN_TYPE': 'bigint', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
-                'ctfd_id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'YES', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
-                'login_try': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': '0', 'IS_NULLABLE': 'NO', 'COLUMN_KEY': '', 'EXTRA': ''}
-            }
+#             sys_logger.info("AUTH TABLE Created")
+#             return engine
+#         else:
+#             expected_columns = {
+#                 'id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'PRI', 'EXTRA': 'auto_increment'},
+#                 'discord_id': {'COLUMN_TYPE': 'bigint', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'NO', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
+#                 'ctfd_id': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': None, 'IS_NULLABLE': 'YES', 'COLUMN_KEY': 'UNI', 'EXTRA': ''},
+#                 'login_try': {'COLUMN_TYPE': 'int', 'COLUMN_DEFAULT': '0', 'IS_NULLABLE': 'NO', 'COLUMN_KEY': '', 'EXTRA': ''}
+#             }
 
-            query = sqlalchemy.select([sqlalchemy.text("COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_KEY, EXTRA")]).select_from(sqlalchemy.text(
-                "information_schema.columns")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
-            res = conn.execute(query)
-            data = res.fetchall()
+#             query = sqlalchemy.select([sqlalchemy.text("COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_KEY, EXTRA")]).select_from(sqlalchemy.text(
+#                 "information_schema.columns")).where(sqlalchemy.text("TABLE_NAME = 'auth'"))
+#             res = conn.execute(query)
+#             data = res.fetchall()
 
-            if len(data) != len(expected_columns):
-                pass
-            else:
-                for i, col in enumerate(data):
-                    expected = expected_columns.get(col['COLUMN_NAME'])
-                    if not expected or any([col[k] != v for k, v in expected.items()]):
-                        break
-                    elif i == len(data) - 1:
-                        sys_logger.info("DB Connected")
-                        return engine
-            sys_logger.warning(
-                "DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.")
+#             if len(data) != len(expected_columns):
+#                 pass
+#             else:
+#                 for i, col in enumerate(data):
+#                     expected = expected_columns.get(col['COLUMN_NAME'])
+#                     if not expected or any([col[k] != v for k, v in expected.items()]):
+#                         break
+#                     elif i == len(data) - 1:
+#                         sys_logger.info("DB Connected")
+#                         return engine
+#             sys_logger.warning(
+#                 "DB validation failed.\nWe will drop the table and re-create it.\nAll data will be lost.")
 
-            if await bot.loop.run_in_executor(None, input, 'Continue? (y/n):').lower() != 'y':
-                sys_logger.info('Abort.')
-                await bot.close()
+#             if await bot.loop.run_in_executor(None, input, 'Continue? (y/n):').lower() != 'y':
+#                 sys_logger.info('Abort.')
+#                 await bot.close()
 
-            query = sqlalchemy.text("DROP TABLE auth;")
-            conn.execute(query)
-            return await connect_db(db_url)
+#             query = sqlalchemy.text("DROP TABLE auth;")
+#             conn.execute(query)
+#             return await connect_db(db_url)
 
 
 async def check_env():
@@ -412,7 +415,8 @@ async def initialize():
 
     log = logger(LOG_CHANNEL_ID)
 
-    engine = await connect_db(getenv('DB_URL'))
+    # engine = await connect_db(getenv('DB_URL'))
+    engine = sqlalchemy.create_engine(getenv('DB_URL'))
     users = User(engine=engine)
 
     auth_channel = bot.get_channel(AUTH_CHANNEL_ID)
